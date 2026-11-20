@@ -1,9 +1,25 @@
 const express = require('express');
 const axios = require('axios');
-const crypto = require('crypto'); // Random name generate karne ke liye built-in module
+const crypto = require('crypto');
 const app = express();
 
 app.use(express.json());
+
+// ==================== AAPKI SETTINGS YAHAN BADLE ====================
+const CONFIG = {
+    // 👇 Apni image ka DIRECT link yahan dalein (imgbb, imgur, github raw, etc.)
+    DEFAULT_IMAGE: "https://i.ibb.co/your-image-link.jpg",
+    
+    // 👇 Aapka WhatsApp Channel Link
+    WHATSAPP_CHANNEL: "https://whatsapp.com/channel/0029VaC5Nk40VycCVuNq362Q",
+    
+    // 👇 Channel ka naam jo show hoga
+    CHANNEL_NAME: "Join Shaheen TV WhatsApp Channel",
+    
+    // 👇 Developer name
+    DEVELOPER: "Shaheen TV Developers"
+};
+// ====================================================================
 
 // CORS Setup
 app.use((req, res, next) => {
@@ -34,24 +50,46 @@ const SUPPORTED_PLATFORMS = [
     "Buzzsprout", "Blubrry", "Libsyn", "SoundClick", "DatPiff", "Livemixtapes", "MixTapeFactory", "MyMixtapez"
 ];
 
-// 1. /support Endpoint
+// Helper: Thumbnail valid hai ya nahi check karo
+function getValidThumbnail(thumbnail) {
+    if (!thumbnail || typeof thumbnail !== 'string' || thumbnail.trim() === '' || thumbnail === 'null') {
+        return CONFIG.DEFAULT_IMAGE;
+    }
+    return thumbnail;
+}
+
+// Helper: Title valid hai ya nahi check karo
+function getValidTitle(title) {
+    if (!title || typeof title !== 'string' || title.trim() === '' || title === 'Video File' || title === 'Media File') {
+        return "Media File Download";
+    }
+    return title;
+}
+
+// ==================== 1. SUPPORT ENDPOINT ====================
 app.get('/support', (req, res) => {
     return res.status(200).json({
         status: "success",
-        developer: "Shaheen TV Developers",
-        whatsapp_group: "https://whatsapp.com/channel/0029VaC5Nk40VycCVuNq362Q",
+        developer: CONFIG.DEVELOPER,
+        join_channel: CONFIG.WHATSAPP_CHANNEL,
+        channel_name: CONFIG.CHANNEL_NAME,
+        default_image: CONFIG.DEFAULT_IMAGE,
         total_supported: SUPPORTED_PLATFORMS.length,
         supported_websites: SUPPORTED_PLATFORMS
     });
 });
 
-// 2. Main Fetch & Mix Endpoint
+// ==================== 2. MAIN FETCH ENDPOINT ====================
 app.get('/', async (req, res) => {
     const videoUrl = req.query.url;
     
     if (!videoUrl) {
         return res.status(400).json({ 
-            error: "Please provide a 'url' parameter. Example: /?url=VIDEO_URL" 
+            status: "error",
+            error: "Please provide a 'url' parameter. Example: /?url=VIDEO_URL",
+            join_channel: CONFIG.WHATSAPP_CHANNEL,
+            channel_name: CONFIG.CHANNEL_NAME,
+            thumbnail: CONFIG.DEFAULT_IMAGE
         });
     }
 
@@ -82,13 +120,32 @@ app.get('/', async (req, res) => {
             });
         }
 
+        // Agar koi format na mile to best default
+        if (cleanFormats.length === 0) {
+            cleanFormats = [{
+                quality: "⭐ Best Quality (Auto)",
+                type: "video",
+                extension: "mp4",
+                download_url: `${baseUrl}/download-file?url=${encodeURIComponent(videoUrl)}&format=best&ext=mp4`
+            }];
+        }
+
+        const thumbnail = getValidThumbnail(metaData.thumbnail || metaData.cover || metaData.image);
+        const title = getValidTitle(metaData.title || metaData.description);
+        const isFallbackImage = thumbnail === CONFIG.DEFAULT_IMAGE;
+
         const customResponse = {
             status: "success",
-            developer: "Shaheen TV Developers",
-            join_group: "https://whatsapp.com/channel/0029VaC5Nk40VycCVuNq362Q",
+            developer: CONFIG.DEVELOPER,
+            
+            // 👇 WhatsApp Channel Link (Click karne par channel khulega)
+            join_channel: CONFIG.WHATSAPP_CHANNEL,
+            channel_name: CONFIG.CHANNEL_NAME,
+            
             video_info: {
-                title: metaData.title || metaData.description || "Video File",
-                thumbnail: metaData.thumbnail || metaData.cover || metaData.image || null,
+                title: title,
+                thumbnail: thumbnail,
+                image_is_fallback: isFallbackImage,
                 uploader: metaData.uploader || metaData.author_name || "Unknown Uploader",
                 original_url: videoUrl,
                 available_formats: cleanFormats
@@ -103,10 +160,17 @@ app.get('/', async (req, res) => {
         
         return res.status(200).json({
             status: "partial_success",
-            developer: "Shaheen TV Developers",
-            join_group: "https://whatsapp.com/channel/0029VaC5Nk40VycCVuNq362Q",
+            developer: CONFIG.DEVELOPER,
+            
+            // 👇 WhatsApp Channel Link
+            join_channel: CONFIG.WHATSAPP_CHANNEL,
+            channel_name: CONFIG.CHANNEL_NAME,
+            
             video_info: {
-                title: "Media File",
+                title: "Media File Download",
+                thumbnail: CONFIG.DEFAULT_IMAGE,       // 👈 Fallback image
+                image_is_fallback: true,
+                uploader: "Unknown Uploader",
                 original_url: videoUrl,
                 available_formats: [
                     {
@@ -121,7 +185,7 @@ app.get('/', async (req, res) => {
     }
 });
 
-// 3. Downloader Proxy Endpoint (Random Filename Generator)
+// ==================== 3. DOWNLOADER PROXY ENDPOINT ====================
 app.get('/download-file', async (req, res) => {
     const targetUrl = req.query.url;
     const format = req.query.format || 'best';
@@ -143,9 +207,8 @@ app.get('/download-file', async (req, res) => {
             responseType: 'stream'
         });
 
-        // 🎲 Yahan par 8 characters ka ek bilkul unique random alphanumeric code generate hoga (e.g., '6i3bjh7a')
+        // 🎲 8 character ka random filename generate
         const randomString = crypto.randomBytes(4).toString('hex');
-        
         const filename = `${randomString}.${ext}`;
         
         res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
