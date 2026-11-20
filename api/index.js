@@ -8,7 +8,7 @@ app.use(express.json());
 // ==================== AAPKI SETTINGS YAHAN BADLE ====================
 const CONFIG = {
     // 👇 Apni image ka DIRECT link yahan dalein (imgbb, imgur, github raw, etc.)
-    DEFAULT_IMAGE: "https://i.ibb.co/your-image-link.jpg",
+    DEFAULT_IMAGE: "https://bit.ly/Shaheen-TV-Img",
     
     // 👇 Aapka WhatsApp Channel Link
     WHATSAPP_CHANNEL: "https://whatsapp.com/channel/0029VaC5Nk40VycCVuNq362Q",
